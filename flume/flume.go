@@ -88,7 +88,7 @@ func (metrics Metrics) createMeasurement(
 	measurementName string,
 	keyName string,
 	tagsName map[string]string,
-) interface{} {
+) string {
 
 	measurement := "flume_" + measurementName
 	tags := metrics.createTags(tagsName)
