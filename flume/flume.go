@@ -29,6 +29,7 @@ type Metrics map[string]map[string]string
 
 func (metrics *Metrics) getJson(flumeUrl string) {
 
+	defer recover()
 	// TODO more connection checks.
 	resp, err := http.Get(flumeUrl)
 	if err != nil {
@@ -71,14 +72,9 @@ func (metrics Metrics) createFields(
 
 	for key, value := range metrics[keyName] {
 		if field, err := createField(key, value); err == nil {
-			if len(filtersMap[typeName]) > 0 && inArray(filtersMap[typeName], key) {
-				fieldsArr = append(fieldsArr, field)
-			} else if len(filtersMap[typeName]) == 0 {
-				fieldsArr = append(fieldsArr, field)
-			}
+			fieldsArr = addField(filtersMap, typeName, key, fieldsArr, field)
 		}
 	}
-
 	fields := strings.Join(fieldsArr, ",")
 	return fields
 }
@@ -143,6 +139,21 @@ func createField(key string, value string) (string, error) {
 	return fieldName, err
 }
 
+func addField(
+	filters map[string][]string,
+	typeName string,
+	key string,
+	fieldsArr []string,
+	field string,
+) []string {
+	typeFiltersLen := len(filters[typeName])
+	isTypeFiltered := inArray(filters[typeName], key)
+	if (typeFiltersLen > 0 && isTypeFiltered) || typeFiltersLen == 0 {
+		fieldsArr = append(fieldsArr, field)
+	}
+	return fieldsArr
+}
+
 var sampleConfig = `
   ## NOTE This plugin only reads numerical measurements, strings and booleans
   ## will be ignored.
@@ -150,8 +161,8 @@ var sampleConfig = `
   name = "agents_metrics"
   ## URL of each server in the service's cluster
   servers = [
-    "http://localhost:8000/flume01.json",
     "http://localhost:8000/flume02.json",
+    "http://localhost:8000/flume01.json",
   ]
   ## Specific metrics could be selected for each type,
   ## instead collecting all metrics as they come from flume.
