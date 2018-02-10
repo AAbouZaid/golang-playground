@@ -27,6 +27,9 @@ type Filters struct {
 // Metrics.
 type Metrics map[string]map[string]string
 
+// QUESTION:
+// Is there a better/standard way to handle http connections?
+// So no need to write all stuff here from scratch?
 func (metrics *Metrics) getJson(flumeUrl string) {
 
 	defer recover()
@@ -64,6 +67,9 @@ func (metrics Metrics) createFields(
 	fieldsArr := []string{}
 	typeName := strings.SplitN(keyName, ".", 2)[0]
 
+	// QUESTION:
+	// Is there a way to call value by name from struct?
+	// So no need to create this map?
 	filtersMap := map[string][]string{
 		"SOURCE":  filters.Source,
 		"CHANNEL": filters.Channel,
@@ -72,7 +78,7 @@ func (metrics Metrics) createFields(
 
 	for key, value := range metrics[keyName] {
 		if field, err := createField(key, value); err == nil {
-			fieldsArr = addField(filtersMap, typeName, key, fieldsArr, field)
+			fieldsArr = addField(filtersMap, typeName, key, field, fieldsArr)
 		}
 	}
 	fields := strings.Join(fieldsArr, ",")
@@ -115,6 +121,9 @@ func (metrics Metrics) gatherServer(
 	}
 }
 
+// QUESTION:
+// Couldn't find anyway to have "if x in list" like python bur writing this.
+// If it's not in the language, I'd like to use module or so.
 func inArray(arr []string, str string) bool {
 	for _, elem := range arr {
 		if elem == str {
@@ -124,10 +133,16 @@ func inArray(arr []string, str string) bool {
 	return false
 }
 
+// QUESTION:
+// Flume itself returns all JSON as strings even numerical values,
+// and only numerical values are desired, that's why this part is need.
+// Any better ideas than what done here?
 func createField(key string, value string) (string, error) {
 	var fieldName string
 	var err error
 
+	// QUESTION:
+	// I'm not sure if this will work fine with big numbers.
 	if intValue, err := strconv.ParseInt(value, 10, 0); err == nil {
 		fieldName = fmt.Sprintf("%s=%v", key, intValue)
 	} else if floatValue, err := strconv.ParseFloat(value, 64); err == nil {
@@ -143,8 +158,8 @@ func addField(
 	filters map[string][]string,
 	typeName string,
 	key string,
-	fieldsArr []string,
 	field string,
+	fieldsArr []string,
 ) []string {
 	typeFiltersLen := len(filters[typeName])
 	isTypeFiltered := inArray(filters[typeName], key)
