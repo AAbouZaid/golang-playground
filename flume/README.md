@@ -1,6 +1,7 @@
 # Flume metrics collector
 
 This is a playground and here is my first `golang` code (well, not just golang, but first ever static typing language).
+
 I didn't find Apache Flume plugin for [Telegraf](https://github.com/influxdata/telegraf), so I found that it's nice to have one.
 (later I will tidy it up to work as a standard [Telegraf plugin](https://github.com/influxdata/telegraf/blob/master/CONTRIBUTING.md#input-plugin-guidelines))
 
@@ -15,14 +16,15 @@ python3 -m http.server
 
 Feel free to write comments about any part of the code.
 
-And I have some questions you can find then as comments in the code.
+And I have some questions you can find then as comments in the code. (under "QUESTION")
+
 
 ## Test
 ```
 go run flume.go
 ```
 
-## Output example:
+## Output example
 Based on the samples, the output should be this:
 ```
 flume_agents_metrics,type=SOURCE,name=kafka-source01 AppendBatchAcceptedCount=0,AppendReceivedCount=0,KafkaEmptyCount=0,OpenConnectionCount=0,StartTime=1516706313621,StopTime=0,AppendAcceptedCount=0,AppendBatchReceivedCount=0,EventAcceptedCount=73353071,EventReceivedCount=73353071,KafkaCommitTimer=6432357,KafkaEventGetTimer=616114808
