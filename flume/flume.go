@@ -176,8 +176,8 @@ var sampleConfig = `
   name = "agents_metrics"
   ## URL of each server in the service's cluster
   servers = [
-    "http://localhost:8000/flume02.json",
     "http://localhost:8000/flume01.json",
+    "http://localhost:8000/flume02.json",
   ]
   ## Specific metrics could be selected for each type,
   ## instead collecting all metrics as they come from flume.
