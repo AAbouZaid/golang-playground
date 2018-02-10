@@ -32,7 +32,12 @@ type Metrics map[string]map[string]string
 // So no need to write all stuff here from scratch?
 func (metrics *Metrics) getJson(flumeUrl string) {
 
+	// QUESTION:
+	// If there are 2 urls and both return non 200, 1 only appear as error!
+	// You can reproduce it by run the code without start the http server.
+	// I don't get why, but it should be something around here
 	defer recover()
+
 	// TODO more connection checks.
 	resp, err := http.Get(flumeUrl)
 	if err != nil {
@@ -122,8 +127,8 @@ func (metrics Metrics) gatherServer(
 }
 
 // QUESTION:
-// Couldn't find anyway to have "if x in list" like python bur writing this.
-// If it's not in the language, I'd like to use module or so.
+// Couldn't find anyway to have "if x in list" like python but writing this.
+// If it's not in the language by default, I'd like to use module or so.
 func inArray(arr []string, str string) bool {
 	for _, elem := range arr {
 		if elem == str {
