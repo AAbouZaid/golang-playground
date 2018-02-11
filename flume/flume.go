@@ -27,10 +27,16 @@ type Filters struct {
 // Metrics.
 type Metrics map[string]map[string]string
 
+const (
+	source = "SOURCE"
+	channel = "CHANNEL"
+	sink ="SINK"
+)
+
 // QUESTION:
 // Is there a better/standard way to handle http connections?
 // So no need to write all stuff here from scratch?
-func (metrics *Metrics) getJson(flumeUrl string) {
+func (m *Metrics) getJson(flumeUrl string) {
 
 	// QUESTION:
 	// If there are 2 urls and both return non 200, 1 only appear as error!
@@ -48,12 +54,12 @@ func (metrics *Metrics) getJson(flumeUrl string) {
 		log.Fatalf("%s %s", flumeUrl, resp.Status)
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&metrics); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&m); err != nil {
 		log.Fatalf("%s", err)
 	}
 }
 
-func (metrics Metrics) createTags(tagsMap map[string]string) string {
+func (m Metrics) createTags(tagsMap map[string]string) string {
 	tagsArr := []string{}
 
 	for key, value := range tagsMap {
@@ -62,62 +68,69 @@ func (metrics Metrics) createTags(tagsMap map[string]string) string {
 	}
 
 	tags := strings.Join(tagsArr, ",")
+
 	return tags
 }
 
-func (metrics Metrics) createFields(
+func (m Metrics) createFields(
 	filters Filters,
 	keyName string,
 ) string {
-	fieldsArr := []string{}
 	typeName := strings.SplitN(keyName, ".", 2)[0]
 
 	// QUESTION:
 	// Is there a way to call value by name from struct?
 	// So no need to create this map?
 	filtersMap := map[string][]string{
-		"SOURCE":  filters.Source,
-		"CHANNEL": filters.Channel,
-		"SINK":    filters.Sink,
+		source:  filters.Source,
+		channel: filters.Channel,
+		sink:    filters.Sink,
 	}
 
-	for key, value := range metrics[keyName] {
+	var fieldsArr []string
+
+	for key, value := range m[keyName] {
 		if field, err := createField(key, value); err == nil {
 			fieldsArr = addField(filtersMap, typeName, key, field, fieldsArr)
 		}
 	}
 	fields := strings.Join(fieldsArr, ",")
+
 	return fields
 }
 
-func (metrics Metrics) createMeasurement(
+func (m Metrics) createMeasurement(
 	filters Filters,
 	measurementName string,
 	keyName string,
 	tagsName map[string]string,
 ) string {
 
-	measurement := "flume_" + measurementName
-	tags := metrics.createTags(tagsName)
-	fields := metrics.createFields(filters, keyName)
+	measurement := fmt.Sprintf("flume_%s", measurementName)
+	tags := m.createTags(tagsName)
+	fields := m.createFields(filters, keyName)
 	output := fmt.Sprintf("%s,%s %s", measurement, tags, fields)
+
 	return output
 }
 
-func (metrics Metrics) gatherServer(
-	serverURL string,
-	measurementName string,
-	filters Filters,
-) {
-	metrics.getJson(serverURL)
+func (m Metrics) gatherServer(serverURL, measurementName string, filters Filters) {
+	// Since this is called in concurrent context, and updates the same reference, racing conditions might happen,
+	// Depending on the number of go routines that operates on this part.
+	// My suggestion is to use channels to push in the fetched data, and you have another go routine that processess
+	// the data in the channel, i.e. simulating map/reduce pattern.
+	// The aforementioned solution is a non-binding, and it depends on the relative understanding
+	// of the commenter.
+	m.getJson(serverURL)
 
-	for keyName, _ := range metrics {
+	for keyName, _ := range m {
 		keyArr := strings.SplitN(keyName, ".", 2)
+
 		fixedTags := map[string]string{
 			"type": keyArr[0],
 			"name": keyArr[1],
 		}
-		output := metrics.createMeasurement(
+		output := m.createMeasurement(
 			filters,
 			measurementName,
 			keyName,
@@ -135,6 +148,7 @@ func inArray(arr []string, str string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -142,18 +156,18 @@ func inArray(arr []string, str string) bool {
 // Flume itself returns all JSON as strings even numerical values,
 // and only numerical values are desired, that's why this part is need.
 // Any better ideas than what done here?
-func createField(key string, value string) (string, error) {
+// Maybe regex, could help.
+func createField(key, value string) (string, error) {
 	var fieldName string
 	var err error
 
 	// QUESTION:
 	// I'm not sure if this will work fine with big numbers.
+	// Yes, it should work, because the return is "int64".
 	if intValue, err := strconv.ParseInt(value, 10, 0); err == nil {
 		fieldName = fmt.Sprintf("%s=%v", key, intValue)
 	} else if floatValue, err := strconv.ParseFloat(value, 64); err == nil {
 		fieldName = fmt.Sprintf("%s=%v", key, floatValue)
-	} else {
-		return fieldName, err
 	}
 
 	return fieldName, err
@@ -161,19 +175,22 @@ func createField(key string, value string) (string, error) {
 
 func addField(
 	filters map[string][]string,
-	typeName string,
-	key string,
+	typeName,
+	key,
 	field string,
 	fieldsArr []string,
 ) []string {
 	typeFiltersLen := len(filters[typeName])
 	isTypeFiltered := inArray(filters[typeName], key)
+
 	if (typeFiltersLen > 0 && isTypeFiltered) || typeFiltersLen == 0 {
 		fieldsArr = append(fieldsArr, field)
 	}
+
 	return fieldsArr
 }
 
+// Todo: Loading from external file, file path can be passed as an argument.
 var sampleConfig = `
   ## NOTE This plugin only reads numerical measurements, strings and booleans
   ## will be ignored.
@@ -196,15 +213,17 @@ var sampleConfig = `
 // Main.
 func main() {
 
-	var flume Flume
-	var metrics Metrics
-	var wg sync.WaitGroup
+	var (
+		flume   Flume
+		metrics Metrics
+		wg      sync.WaitGroup
+	)
 	toml.Unmarshal([]byte(sampleConfig), &flume)
 	for _, server := range flume.Servers {
 		wg.Add(1)
 		go func(server string) {
-			defer wg.Done()
 			metrics.gatherServer(server, flume.Name, flume.Filters)
+			wg.Done()
 		}(server)
 	}
 	wg.Wait()
