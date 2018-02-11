@@ -40,3 +40,7 @@ flume_agents_metrics,type=SINK,name=hdfs-sink03 EventDrainSuccessCount=36533183,
 flume_agents_metrics,type=CHANNEL,name=memChannel EventPutSuccessCount=22948908,EventPutAttemptCount=22948908
 flume_agents_metrics,type=CHANNEL,name=fileChannel EventPutSuccessCount=468085,EventPutAttemptCount=468086
 ```
+
+## Todo
+* Makefile, for the ease of build.
+* Unit tests, so the code can be understood easily.
